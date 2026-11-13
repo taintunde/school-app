@@ -13,6 +13,10 @@ interface StudentDao {
     fun getAllStudentsWithScores(): Flow<List<StudentWithScores>>
 
     @Transaction
+    @Query("SELECT * FROM students ORDER BY fullName ASC")
+    suspend fun getAllStudentsWithScoresOnce(): List<StudentWithScores>
+
+    @Transaction
     @Query("SELECT * FROM students WHERE id = :id")
     fun getStudentWithScoresById(id: Int): Flow<StudentWithScores?>
 
@@ -36,6 +40,9 @@ interface StudentDao {
 interface SubjectScoreDao {
     @Query("SELECT * FROM subject_scores WHERE studentId = :studentId")
     fun getScoresForStudent(studentId: Int): Flow<List<SubjectScore>>
+
+    @Query("SELECT * FROM subject_scores WHERE studentId = :studentId")
+    suspend fun getScoresForStudentOnce(studentId: Int): List<SubjectScore>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertScore(score: SubjectScore)
@@ -66,6 +73,9 @@ interface SchoolSettingsDao {
 interface SubjectDao {
     @Query("SELECT * FROM subjects ORDER BY name ASC")
     fun getAllSubjectsFlow(): Flow<List<Subject>>
+
+    @Query("SELECT * FROM subjects")
+    suspend fun getAllSubjectsOnce(): List<Subject>
 
     @Query("SELECT * FROM subjects WHERE classLevel = :classLevel ORDER BY name ASC")
     fun getSubjectsByClassFlow(classLevel: String): Flow<List<Subject>>
@@ -124,7 +134,48 @@ interface GradingScaleDao {
     @Delete
     suspend fun deleteScale(config: GradingScaleConfig)
 
+    @Query("SELECT * FROM grading_scale_configs")
+    suspend fun getAllScalesOnce(): List<GradingScaleConfig>
+
     @Query("DELETE FROM grading_scale_configs")
     suspend fun deleteAllScales()
+}
+
+@Dao
+interface AcademicResultDao {
+    @Query("SELECT * FROM academic_results ORDER BY updatedAt DESC")
+    fun getAllAcademicResults(): Flow<List<AcademicResult>>
+
+    @Query("SELECT * FROM academic_results WHERE studentId = :studentId ORDER BY session DESC, term ASC")
+    fun getAcademicResultsForStudent(studentId: Int): Flow<List<AcademicResult>>
+
+    @Query("SELECT * FROM academic_results WHERE studentId = :studentId AND term = :term AND session = :session LIMIT 1")
+    suspend fun getAcademicResultForStudentTerm(studentId: Int, term: String, session: String): AcademicResult?
+
+    @Transaction
+    @Query("SELECT * FROM students ORDER BY fullName ASC")
+    fun getAllStudentsWithAcademicResults(): Flow<List<StudentWithAcademicResults>>
+
+    @Transaction
+    @Query("SELECT * FROM students WHERE id = :studentId LIMIT 1")
+    fun getStudentWithAcademicResultsById(studentId: Int): Flow<StudentWithAcademicResults?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAcademicResult(result: AcademicResult): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAcademicResults(results: List<AcademicResult>)
+
+    @Update
+    suspend fun updateAcademicResult(result: AcademicResult)
+
+    @Delete
+    suspend fun deleteAcademicResult(result: AcademicResult)
+
+    @Query("DELETE FROM academic_results WHERE studentId = :studentId")
+    suspend fun deleteAcademicResultsForStudent(studentId: Int)
+
+    @Query("DELETE FROM academic_results")
+    suspend fun deleteAllAcademicResults()
 }
 

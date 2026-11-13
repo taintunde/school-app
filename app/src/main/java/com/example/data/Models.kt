@@ -1,11 +1,19 @@
 package com.example.data
 
-import androidx.room.Entity
-import androidx.room.PrimaryKey
 import androidx.room.Embedded
+import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
+import androidx.room.PrimaryKey
 import androidx.room.Relation
 
-@Entity(tableName = "students")
+@Entity(
+    tableName = "students",
+    indices = [
+        Index(value = ["studentId"]),
+        Index(value = ["studentClass", "term", "session"])
+    ]
+)
 data class Student(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val studentId: String, // e.g., "STU/2026/001"
@@ -17,7 +25,43 @@ data class Student(
     val attendancePresent: Int = 0,
     val attendanceTotal: Int = 0,
     val teacherComment: String = "",
-    val principalComment: String = ""
+    val principalComment: String = "",
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+@Entity(
+    tableName = "academic_results",
+    foreignKeys = [
+        ForeignKey(
+            entity = Student::class,
+            parentColumns = ["id"],
+            childColumns = ["studentId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [
+        Index(value = ["studentId"]),
+        Index(value = ["studentId", "term", "session"], unique = true)
+    ]
+)
+data class AcademicResult(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val studentId: Int, // Foreign key referencing Student.id
+    val term: String, // e.g., "1st Term", "2nd Term", "3rd Term"
+    val session: String, // e.g., "2025/2026"
+    val studentClass: String, // e.g., "JSS 1", "SS 1"
+    val totalScore: Double = 0.0,
+    val averageScore: Double = 0.0,
+    val gpa: Double = 0.0,
+    val overallGrade: String = "F",
+    val overallRemark: String = "Fail",
+    val positionInClass: String = "",
+    val subjectsCount: Int = 0,
+    val subjectsPassed: Int = 0,
+    val teacherComment: String = "",
+    val principalComment: String = "",
+    val isPublished: Boolean = false,
+    val updatedAt: Long = System.currentTimeMillis()
 )
 
 @Entity(tableName = "subject_scores")
@@ -134,6 +178,15 @@ data class StudentWithScores(
     val totalScore: Double get() = scores.sumOf { it.totalScore }
     val averageScore: Double get() = if (scores.isNotEmpty()) totalScore / scores.size else 0.0
 }
+
+data class StudentWithAcademicResults(
+    @Embedded val student: Student,
+    @Relation(
+        parentColumn = "id",
+        entityColumn = "studentId"
+    )
+    val academicResults: List<AcademicResult>
+)
 
 // Nigerian standard grading system
 fun getGrade(score: Double): String {
@@ -386,6 +439,33 @@ object GradingScalePresets {
                 appliesToClasses = "All"
             )
         )
+    }
+
+    fun resolveScaleForClass(studentClass: String, scales: List<GradingScaleConfig>): GradingScaleConfig {
+        val activeScales = scales.ifEmpty { getDefaultScales() }
+        val normClass = studentClass.trim().lowercase()
+
+        val directMatch = activeScales.find { scale ->
+            scale.appliesToClasses.split(",").any { it.trim().equals(studentClass, ignoreCase = true) }
+        }
+        if (directMatch != null) return directMatch
+
+        val keywordMatch = activeScales.find { scale ->
+            val level = scale.schoolLevel.lowercase()
+            when {
+                normClass.contains("ss") || normClass.contains("senior") -> level.contains("senior") || level.contains("ss")
+                normClass.contains("jss") || normClass.contains("junior") -> level.contains("junior") || level.contains("jss")
+                normClass.contains("primary") || normClass.contains("basic") -> level.contains("primary") || level.contains("elementary")
+                normClass.contains("nursery") || normClass.contains("creche") || normClass.contains("kindergarten") -> level.contains("early") || level.contains("nursery")
+                normClass.contains("tertiary") || normClass.contains("nd") || normClass.contains("hnd") || normClass.contains("college") -> level.contains("tertiary") || level.contains("college")
+                else -> false
+            }
+        }
+        if (keywordMatch != null) return keywordMatch
+
+        return activeScales.firstOrNull { it.isDefault }
+            ?: activeScales.firstOrNull { it.schoolLevel.contains("General", ignoreCase = true) }
+            ?: activeScales.first()
     }
 }
 

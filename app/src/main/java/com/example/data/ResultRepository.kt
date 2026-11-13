@@ -4,16 +4,30 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
 import java.util.UUID
 
-class ResultRepository(private val database: AppDatabase) {
-    private val studentDao = database.studentDao()
-    private val scoreDao = database.subjectScoreDao()
-    private val settingsDao = database.schoolSettingsDao()
-    private val subjectDao = database.subjectDao()
-    private val schoolClassDao = database.schoolClassDao()
-    private val gradingScaleDao = database.gradingScaleDao()
+class ResultRepository(
+    private val studentDao: StudentDao,
+    private val scoreDao: SubjectScoreDao,
+    private val academicResultDao: AcademicResultDao,
+    private val settingsDao: SchoolSettingsDao,
+    private val subjectDao: SubjectDao,
+    private val schoolClassDao: SchoolClassDao,
+    private val gradingScaleDao: GradingScaleDao
+) {
+    constructor(database: AppDatabase) : this(
+        studentDao = database.studentDao(),
+        scoreDao = database.subjectScoreDao(),
+        academicResultDao = database.academicResultDao(),
+        settingsDao = database.schoolSettingsDao(),
+        subjectDao = database.subjectDao(),
+        schoolClassDao = database.schoolClassDao(),
+        gradingScaleDao = database.gradingScaleDao()
+    )
 
     val allStudents: Flow<List<Student>> = studentDao.getAllStudents()
     val allStudentsWithScores: Flow<List<StudentWithScores>> = studentDao.getAllStudentsWithScores()
+    val allAcademicResults: Flow<List<AcademicResult>> = academicResultDao.getAllAcademicResults()
+    val allStudentsWithAcademicResults: Flow<List<StudentWithAcademicResults>> =
+        academicResultDao.getAllStudentsWithAcademicResults()
     val schoolSettings: Flow<SchoolSettings?> = settingsDao.getSettingsFlow()
     val allSubjects: Flow<List<Subject>> = subjectDao.getAllSubjectsFlow()
     val allClasses: Flow<List<SchoolClass>> = schoolClassDao.getAllClassesFlow()
@@ -94,6 +108,103 @@ class ResultRepository(private val database: AppDatabase) {
 
     suspend fun deleteScoresForStudent(studentId: Int) {
         scoreDao.deleteScoresForStudent(studentId)
+    }
+
+    suspend fun deleteScore(score: SubjectScore) {
+        scoreDao.deleteScore(score)
+    }
+
+    suspend fun deleteAllStudents() {
+        studentDao.deleteAllStudents()
+    }
+
+    fun getAcademicResultsForStudent(studentId: Int): Flow<List<AcademicResult>> {
+        return academicResultDao.getAcademicResultsForStudent(studentId)
+    }
+
+    fun getStudentWithAcademicResultsById(studentId: Int): Flow<StudentWithAcademicResults?> {
+        return academicResultDao.getStudentWithAcademicResultsById(studentId)
+    }
+
+    suspend fun insertAcademicResult(result: AcademicResult): Long {
+        return academicResultDao.insertAcademicResult(result)
+    }
+
+    suspend fun updateAcademicResult(result: AcademicResult) {
+        academicResultDao.updateAcademicResult(result)
+    }
+
+    suspend fun deleteAcademicResult(result: AcademicResult) {
+        academicResultDao.deleteAcademicResult(result)
+    }
+
+    suspend fun deleteAcademicResultsForStudent(studentId: Int) {
+        academicResultDao.deleteAcademicResultsForStudent(studentId)
+    }
+
+    suspend fun syncAcademicResultForStudent(studentId: Int) {
+        val student = studentDao.getStudentById(studentId) ?: return
+        val scores = scoreDao.getScoresForStudentOnce(studentId)
+        val scales = gradingScaleDao.getAllScalesOnce()
+        val scale = GradingScalePresets.resolveScaleForClass(student.studentClass, scales)
+        val creditMap = subjectDao.getAllSubjectsOnce().associate { it.name to it.creditUnits }
+
+        val totalScore = scores.sumOf { it.totalScore }
+        val averageScore = if (scores.isNotEmpty()) totalScore / scores.size else 0.0
+        val overallBand = scale.evaluateScore(averageScore)
+        val gpa = scale.calculateStudentGpa(scores, creditMap)
+        val subjectsPassed = scores.count { it.totalScore >= 40.0 }
+
+        val classPeers = studentDao.getAllStudentsWithScoresOnce().filter {
+            it.student.studentClass.equals(student.studentClass, ignoreCase = true) &&
+                it.student.term.equals(student.term, ignoreCase = true) &&
+                it.student.session.equals(student.session, ignoreCase = true)
+        }
+        val position = if (classPeers.isEmpty()) {
+            "1st"
+        } else {
+            val sorted = classPeers.sortedByDescending { it.averageScore }
+            val rank = sorted.indexOfFirst { it.student.id == student.id }.let { if (it >= 0) it + 1 else 1 }
+            "${formatOrdinalRank(rank)} out of ${classPeers.size}"
+        }
+
+        val existing = academicResultDao.getAcademicResultForStudentTerm(
+            studentId = student.id,
+            term = student.term,
+            session = student.session
+        )
+
+        val record = AcademicResult(
+            id = existing?.id ?: 0,
+            studentId = student.id,
+            term = student.term,
+            session = student.session,
+            studentClass = student.studentClass,
+            totalScore = totalScore,
+            averageScore = averageScore,
+            gpa = gpa,
+            overallGrade = overallBand.grade,
+            overallRemark = overallBand.remark,
+            positionInClass = position,
+            subjectsCount = scores.size,
+            subjectsPassed = subjectsPassed,
+            teacherComment = student.teacherComment,
+            principalComment = student.principalComment,
+            isPublished = existing?.isPublished ?: false,
+            updatedAt = System.currentTimeMillis()
+        )
+        academicResultDao.insertAcademicResult(record)
+    }
+
+    private fun formatOrdinalRank(number: Int): String {
+        val mod10 = number % 10
+        val mod100 = number % 100
+        return when {
+            mod10 == 1 && mod100 != 11 -> "${number}st"
+            mod10 == 2 && mod100 != 12 -> "${number}nd"
+            mod10 == 3 && mod100 != 13 -> "${number}rd"
+            else -> "${number}th"
+        }
     }
 
     suspend fun saveSettings(settings: SchoolSettings) {
@@ -253,6 +364,15 @@ class ResultRepository(private val database: AppDatabase) {
         val currentScales = gradingScaleDao.getAllScalesFlow().firstOrNull() ?: emptyList()
         if (currentScales.isEmpty()) {
             gradingScaleDao.insertScales(GradingScalePresets.getDefaultScales())
+        }
+
+        // Populate structured AcademicResult records for seeded or existing students if missing
+        val currentResults = academicResultDao.getAllAcademicResults().firstOrNull() ?: emptyList()
+        if (currentResults.isEmpty()) {
+            val allStudentsNow = studentDao.getAllStudents().firstOrNull() ?: emptyList()
+            allStudentsNow.forEach { student ->
+                syncAcademicResultForStudent(student.id)
+            }
         }
     }
 }

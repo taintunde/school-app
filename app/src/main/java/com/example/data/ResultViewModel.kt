@@ -32,12 +32,21 @@ enum class AppScreen {
     GradingScaleConfig
 }
 
-class ResultViewModel(application: Application) : AndroidViewModel(application) {
+class ResultViewModel(
+    application: Application,
     private val repository: ResultRepository
+) : AndroidViewModel(application) {
+
+    constructor(application: Application) : this(
+        application,
+        com.example.SmartResultApplication.containerFrom(application).resultRepository
+    )
 
     // UI state streams
     val allStudents: StateFlow<List<Student>>
     val allStudentsWithScores: StateFlow<List<StudentWithScores>>
+    val allAcademicResults: StateFlow<List<AcademicResult>>
+    val allStudentsWithAcademicResults: StateFlow<List<StudentWithAcademicResults>>
     val schoolSettings: StateFlow<SchoolSettings>
     val allSubjects: StateFlow<List<Subject>>
     val allClasses: StateFlow<List<SchoolClass>>
@@ -57,13 +66,16 @@ class ResultViewModel(application: Application) : AndroidViewModel(application) 
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
     init {
-        val database = AppDatabase.getDatabase(application)
-        repository = ResultRepository(database)
-
         allStudents = repository.allStudents
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
         allStudentsWithScores = repository.allStudentsWithScores
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+        allAcademicResults = repository.allAcademicResults
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+        allStudentsWithAcademicResults = repository.allStudentsWithAcademicResults
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
         allSubjects = repository.allSubjects
@@ -116,35 +128,7 @@ class ResultViewModel(application: Application) : AndroidViewModel(application) 
 
     // Resolves appropriate grading scale for a class level
     fun getGradingScaleForStudent(studentClass: String): GradingScaleConfig {
-        val scales = allGradingScales.value
-        if (scales.isEmpty()) {
-            return GradingScalePresets.getDefaultScales().firstOrNull { it.isDefault } ?: GradingScalePresets.getDefaultScales().first()
-        }
-
-        val normClass = studentClass.trim().lowercase()
-
-        // 1. Direct match by appliesToClasses list
-        val directMatch = scales.find { scale ->
-            scale.appliesToClasses.split(",").any { it.trim().equals(studentClass, ignoreCase = true) }
-        }
-        if (directMatch != null) return directMatch
-
-        // 2. Keyword heuristic matching
-        val keywordMatch = scales.find { scale ->
-            val level = scale.schoolLevel.lowercase()
-            when {
-                normClass.contains("ss") || normClass.contains("senior") -> level.contains("senior") || level.contains("ss")
-                normClass.contains("jss") || normClass.contains("junior") -> level.contains("junior") || level.contains("jss")
-                normClass.contains("primary") || normClass.contains("basic") -> level.contains("primary") || level.contains("elementary")
-                normClass.contains("nursery") || normClass.contains("creche") || normClass.contains("kindergarten") -> level.contains("early") || level.contains("nursery")
-                normClass.contains("tertiary") || normClass.contains("nd") || normClass.contains("hnd") || normClass.contains("college") -> level.contains("tertiary") || level.contains("college")
-                else -> false
-            }
-        }
-        if (keywordMatch != null) return keywordMatch
-
-        // 3. Fallback to default scale or first available
-        return scales.firstOrNull { it.isDefault } ?: scales.firstOrNull { it.schoolLevel.contains("General", ignoreCase = true) } ?: scales.first()
+        return GradingScalePresets.resolveScaleForClass(studentClass, allGradingScales.value)
     }
 
     // Evaluate grade and remark for a specific score under a student's class
@@ -284,7 +268,8 @@ class ResultViewModel(application: Application) : AndroidViewModel(application) 
                 term = term,
                 session = session
             )
-            repository.insertStudent(newStudent)
+            val insertedId = repository.insertStudent(newStudent).toInt()
+            repository.syncAcademicResultForStudent(insertedId)
             onSuccess()
         }
     }
@@ -292,6 +277,7 @@ class ResultViewModel(application: Application) : AndroidViewModel(application) 
     fun updateStudent(student: Student) {
         viewModelScope.launch {
             repository.updateStudent(student)
+            repository.syncAcademicResultForStudent(student.id)
         }
     }
 
@@ -344,14 +330,51 @@ class ResultViewModel(application: Application) : AndroidViewModel(application) 
                 examScore = examScore
             )
             repository.insertScore(newScore)
+            repository.syncAcademicResultForStudent(studentId)
             onSuccess()
         }
     }
 
     fun deleteScore(score: SubjectScore) {
         viewModelScope.launch {
-            val db = AppDatabase.getDatabase(getApplication())
-            db.subjectScoreDao().deleteScore(score)
+            repository.deleteScore(score)
+            repository.syncAcademicResultForStudent(score.studentId)
+        }
+    }
+
+    // AcademicResult Management Actions
+    fun saveAcademicResult(result: AcademicResult, onSuccess: () -> Unit = {}) {
+        viewModelScope.launch {
+            if (result.id > 0) {
+                repository.updateAcademicResult(result.copy(updatedAt = System.currentTimeMillis()))
+            } else {
+                repository.insertAcademicResult(result.copy(updatedAt = System.currentTimeMillis()))
+            }
+            onSuccess()
+        }
+    }
+
+    fun deleteAcademicResult(result: AcademicResult, onSuccess: () -> Unit = {}) {
+        viewModelScope.launch {
+            repository.deleteAcademicResult(result)
+            onSuccess()
+        }
+    }
+
+    fun toggleAcademicResultPublished(result: AcademicResult) {
+        viewModelScope.launch {
+            repository.updateAcademicResult(
+                result.copy(
+                    isPublished = !result.isPublished,
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
+        }
+    }
+
+    fun syncAcademicResultForStudent(studentId: Int) {
+        viewModelScope.launch {
+            repository.syncAcademicResultForStudent(studentId)
         }
     }
 
@@ -479,7 +502,8 @@ class ResultViewModel(application: Application) : AndroidViewModel(application) 
                         term = "3rd Term",
                         session = "2025/2026"
                     )
-                    repository.insertStudent(student)
+                    val insertedId = repository.insertStudent(student).toInt()
+                    repository.syncAcademicResultForStudent(insertedId)
                     successCount++
                 }
             }
@@ -549,7 +573,8 @@ class ResultViewModel(application: Application) : AndroidViewModel(application) 
                         principalComment = principalComment
                     )
 
-                    repository.insertStudent(studentToSave)
+                    val insertedId = repository.insertStudent(studentToSave).toInt()
+                    repository.syncAcademicResultForStudent(insertedId)
                     importedCount++
                 }
             }
@@ -670,6 +695,9 @@ class ResultViewModel(application: Application) : AndroidViewModel(application) 
             }
 
             if (scoresAdded > 0) {
+                processedStudents.forEach { studentDbId ->
+                    repository.syncAcademicResultForStudent(studentDbId)
+                }
                 onSuccess(processedStudents.size, scoresAdded)
             } else {
                 onError("No valid scores or subject names found in mapped columns.")
@@ -679,8 +707,7 @@ class ResultViewModel(application: Application) : AndroidViewModel(application) 
 
     fun clearAllStudents() {
         viewModelScope.launch {
-            val db = AppDatabase.getDatabase(getApplication())
-            db.studentDao().deleteAllStudents()
+            repository.deleteAllStudents()
         }
     }
 
@@ -1946,7 +1973,8 @@ class ResultViewModel(application: Application) : AndroidViewModel(application) 
                         )
                         repository.insertScore(score)
                     }
-                    
+                    repository.syncAcademicResultForStudent(generatedId)
+
                     addPullLog("  ↳ Pulled & Synced: [student_${idStr.replace("/", "_")}] -> $name ($studentClass)")
                     kotlinx.coroutines.delay(200)
                 }
@@ -2035,6 +2063,7 @@ class ResultViewModel(application: Application) : AndroidViewModel(application) 
                                             repository.insertScore(newScore)
                                         }
                                     }
+                                    repository.syncAcademicResultForStudent(dbId)
                                     addPullLog("  ↳ Parsed: /students/student_${studentId.replace("/", "_")} -> $fullName")
                                 }
                                 _pullState.value = "COMPLETE"
