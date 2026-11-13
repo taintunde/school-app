@@ -6,12 +6,14 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.core.content.FileProvider
+import androidx.core.graphics.toColorInt
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileWriter
+import java.util.Locale
 
 enum class AppScreen {
     Dashboard,
@@ -910,8 +912,8 @@ class ResultViewModel(application: Application) : AndroidViewModel(application) 
             canvas.drawText("SUMMARY STATS:", 40f, currentY + 18f, textPaint)
             
             textPaint.typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.NORMAL)
-            canvas.drawText("Cumulative Score: ${String.format("%.1f", record.totalScore)}", 40f, currentY + 36f, textPaint)
-            canvas.drawText("Terminal Percentage Average: ${String.format("%.2f%%", record.averageScore)}", 220f, currentY + 36f, textPaint)
+            canvas.drawText("Cumulative Score: ${String.format(Locale.US, "%.1f", record.totalScore)}", 40f, currentY + 36f, textPaint)
+            canvas.drawText("Terminal Percentage Average: ${String.format(Locale.US, "%.2f%%", record.averageScore)}", 220f, currentY + 36f, textPaint)
 
             // Draw remarks block
             if (settings.showTeacherComments) {
@@ -1189,8 +1191,8 @@ class ResultViewModel(application: Application) : AndroidViewModel(application) 
                     currentY += 15f
                     textPaint.textSize = 10f
                     textPaint.typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
-                    canvas.drawText("CUMULATIVE SCORE: ${String.format("%.1f", record.totalScore)}", 40f, currentY, textPaint)
-                    canvas.drawText("TERM AVERAGE PERCENT: ${String.format("%.2f%%", record.averageScore)}", 300f, currentY, textPaint)
+                    canvas.drawText("CUMULATIVE SCORE: ${String.format(Locale.US, "%.1f", record.totalScore)}", 40f, currentY, textPaint)
+                    canvas.drawText("TERM AVERAGE PERCENT: ${String.format(Locale.US, "%.2f%%", record.averageScore)}", 300f, currentY, textPaint)
 
                     // Comments segment
                     if (settings.showTeacherComments || settings.showPrincipalComments) {
@@ -1319,7 +1321,7 @@ class ResultViewModel(application: Application) : AndroidViewModel(application) 
 
                 // Header Banner
                 val primaryColor = try {
-                    android.graphics.Color.parseColor(settings.brandColorHex)
+                    settings.brandColorHex.toColorInt()
                 } catch (e: Exception) {
                     0xFF0D5C34.toInt()
                 }
@@ -1471,7 +1473,7 @@ class ResultViewModel(application: Application) : AndroidViewModel(application) 
                 canvas.drawText("CUMULATIVE SCORE: ${record.totalScore}", 30f, currentY + 18f, textPaint)
                 canvas.drawText("OBTAINABLE MAX: ${scores.size * 100}", 220f, currentY + 18f, textPaint)
                 canvas.drawText("OVERALL GRADE: $overallGrade", 420f, currentY + 18f, textPaint)
-                canvas.drawText("PERCENTAGE AVERAGE: ${String.format("%.2f%%", record.averageScore)}", 30f, currentY + 36f, textPaint)
+                canvas.drawText("PERCENTAGE AVERAGE: ${String.format(Locale.US, "%.2f%%", record.averageScore)}", 30f, currentY + 36f, textPaint)
 
                 // Comments
                 if (settings.showTeacherComments || settings.showPrincipalComments) {
@@ -1580,7 +1582,7 @@ class ResultViewModel(application: Application) : AndroidViewModel(application) 
                 val s = record.student
                 val pos = getStudentPosition(s, allStudentsWithScores.value)
                 val grade = getGrade(record.averageScore)
-                writer.append("${s.studentId},\"${s.fullName}\",${s.studentClass},${s.term},${s.gender},${record.totalScore},${String.format("%.2f", record.averageScore)},$grade,$pos\n")
+                writer.append("${s.studentId},\"${s.fullName}\",${s.studentClass},${s.term},${s.gender},${record.totalScore},${String.format(Locale.US, "%.2f", record.averageScore)},$grade,$pos\n")
             }
             writer.flush()
             writer.close()
@@ -1733,7 +1735,7 @@ class ResultViewModel(application: Application) : AndroidViewModel(application) 
                         val s = record.student
                         addLog("  ↳ Uploading Student Doc: ${s.fullName} (${s.studentId})")
                         addLog("    - Path: /students/student_${s.studentId.replace("/", "_")}")
-                        addLog("    - Payload: [scores=${record.scores.size}, avg=${String.format("%.2f", record.averageScore)}%, class='${s.studentClass}']")
+                        addLog("    - Payload: [scores=${record.scores.size}, avg=${String.format(Locale.US, "%.2f", record.averageScore)}%, class='${s.studentClass}']")
                         kotlinx.coroutines.delay(250)
                     }
                 }
@@ -2213,11 +2215,11 @@ class ResultViewModel(application: Application) : AndroidViewModel(application) 
         // Row 1 stats
         val classSizeHash = 20 + Math.abs((student.studentId + 40).hashCode() % 26)
         drawMetaCell("No. of students in class", "$classSizeHash", 32f, 205f)
-        drawMetaCell("Overall total score", String.format("%.1f", record.totalScore), 212f, 205f)
+        drawMetaCell("Overall total score", String.format(Locale.US, "%.1f", record.totalScore), 212f, 205f)
         drawMetaCell("No. of days school opened", "118", 392f, 205f)
 
         // Row 2 stats
-        drawMetaCell("Student's average score", String.format("%.2f%%", record.averageScore), 32f, 221.5f)
+        drawMetaCell("Student's average score", String.format(Locale.US, "%.2f%%", record.averageScore), 32f, 221.5f)
         drawMetaCell("Class average score", "54.82%", 212f, 221.5f)
         drawMetaCell("No. of days present", "113", 392f, 221.5f)
 
@@ -2247,8 +2249,8 @@ class ResultViewModel(application: Application) : AndroidViewModel(application) 
         var currentY = tableY + 20f
 
         record.scores.forEachIndexed { idx, sc ->
-            val t1Val = String.format("%.1f", sc.caScore * 0.5)
-            val t2Val = String.format("%.1f", sc.caScore * 0.5)
+            val t1Val = String.format(Locale.US, "%.1f", sc.caScore * 0.5)
+            val t2Val = String.format(Locale.US, "%.1f", sc.caScore * 0.5)
 
             if (idx % 2 == 1) {
                 paint.color = 0xFFF5F7F6.toInt()

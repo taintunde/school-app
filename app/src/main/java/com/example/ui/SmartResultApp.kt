@@ -59,6 +59,9 @@ import android.net.Uri
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.graphics.toColorInt
+import androidx.core.net.toUri
+import java.util.Locale
 
 @Composable
 fun SmartResultApp(viewModel: ResultViewModel) {
@@ -126,7 +129,7 @@ fun SmartResultApp(viewModel: ResultViewModel) {
                     val activeColor = remember(settings.immersiveMode, settings.brandColorHex) {
                         if (settings.immersiveMode) {
                             try {
-                                Color(android.graphics.Color.parseColor(settings.brandColorHex))
+                                Color(settings.brandColorHex.toColorInt())
                             } catch (e: Exception) {
                                 SchoolGreen
                             }
@@ -227,7 +230,7 @@ fun NavigationSidebar(
     val activeColor = remember(settings.immersiveMode, settings.brandColorHex) {
         if (settings.immersiveMode) {
             try {
-                Color(android.graphics.Color.parseColor(settings.brandColorHex))
+                Color(settings.brandColorHex.toColorInt())
             } catch (e: Exception) {
                 SchoolGreen
             }
@@ -472,7 +475,7 @@ fun AcademicShieldLogo(
         val context = LocalContext.current
         val imageBitmap = remember(logoUri) {
             try {
-                val fileUri = if (logoUri.startsWith("/")) Uri.fromFile(java.io.File(logoUri)) else Uri.parse(logoUri)
+                val fileUri = if (logoUri.startsWith("/")) Uri.fromFile(java.io.File(logoUri)) else logoUri.toUri()
                 val inputStream = context.contentResolver.openInputStream(fileUri)
                 val bitmap = BitmapFactory.decodeStream(inputStream)
                 inputStream?.close()
@@ -695,7 +698,7 @@ fun AcademicShieldLogo(
         val initials = parts.getOrNull(0) ?: "SCH"
         val shape = parts.getOrNull(1) ?: "circle"
         val colorHex = parts.getOrNull(2) ?: "#0D5C34"
-        val color = try { Color(android.graphics.Color.parseColor(colorHex)) } catch (e: Exception) { Color(0xFF0D5C34) }
+        val color = try { Color(colorHex.toColorInt()) } catch (e: Exception) { Color(0xFF0D5C34) }
         
         Box(
             modifier = modifier,
@@ -909,7 +912,7 @@ fun DashboardScreen(
                 )
                 MetricCard(
                     title = "School Average",
-                    value = String.format("%.1f%%", schoolAverage),
+                    value = String.format(Locale.US, "%.1f%%", schoolAverage),
                     icon = Icons.Default.Star,
                     color = SchoolGold,
                     modifier = Modifier.weight(1f)
@@ -1170,7 +1173,7 @@ fun DashboardScreen(
             val activeColor = remember(settings.immersiveMode, settings.brandColorHex) {
                 if (settings.immersiveMode) {
                     try {
-                        Color(android.graphics.Color.parseColor(settings.brandColorHex))
+                        Color(settings.brandColorHex.toColorInt())
                     } catch (e: Exception) {
                         SchoolGreen
                     }
@@ -1318,7 +1321,7 @@ fun BarMetric(label: String, count: Int, total: Int, color: Color) {
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(label, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color.DarkGray)
-            Text("$count student(s) (${String.format("%.1f%%", fraction * 100)})", fontSize = 11.sp, color = Color.Gray)
+            Text("$count student(s) (${String.format(Locale.US, "%.1f%%", fraction * 100)})", fontSize = 11.sp, color = Color.Gray)
         }
         Box(
             modifier = Modifier
@@ -1407,7 +1410,7 @@ fun StudentCard(
                     color = Color.Gray
                 )
                 Text(
-                    text = "${record.scores.size} Subject(s) | Avg: ${String.format("%.1f%%", record.averageScore)}",
+                    text = "${record.scores.size} Subject(s) | Avg: ${String.format(Locale.US, "%.1f%%", record.averageScore)}",
                     fontSize = 11.sp,
                     color = if (record.scores.isNotEmpty()) SchoolGreen else Color.Gray,
                     fontWeight = FontWeight.SemiBold
@@ -1773,7 +1776,7 @@ fun AddInfoScreen(
     val activeBrandColor = remember(settings.immersiveMode, settings.brandColorHex) {
         if (settings.immersiveMode) {
             try {
-                Color(android.graphics.Color.parseColor(settings.brandColorHex))
+                Color(settings.brandColorHex.toColorInt())
             } catch (e: Exception) {
                 SchoolGreen
             }
@@ -1890,7 +1893,7 @@ fun AddClassScreen(
     val activeBrandColor = remember(settings.immersiveMode, settings.brandColorHex) {
         if (settings.immersiveMode) {
             try {
-                Color(android.graphics.Color.parseColor(settings.brandColorHex))
+                Color(settings.brandColorHex.toColorInt())
             } catch (e: Exception) {
                 SchoolGreen
             }
@@ -2838,7 +2841,7 @@ fun GenerateResultsScreen(
                             DelmaClassicPreview(s, currentRecord, positionString, settings)
                         } else {
                             val activeHeaderBrandColor = if (settings.immersiveMode) {
-                                try { Color(android.graphics.Color.parseColor(settings.brandColorHex)) } catch (e: Exception) { SchoolGreen }
+                                try { Color(settings.brandColorHex.toColorInt()) } catch (e: Exception) { SchoolGreen }
                             } else {
                                 SchoolGreen
                             }
@@ -3013,13 +3016,13 @@ fun GenerateResultsScreen(
                             ) {
                                 Column {
                                     Text(
-                                        "Cumulative score: ${String.format("%.1f", currentRecord.totalScore)}",
+                                        "Cumulative score: ${String.format(Locale.US, "%.1f", currentRecord.totalScore)}",
                                         fontWeight = FontWeight.Bold,
                                         color = Color.Black,
                                         fontSize = 12.sp
                                     )
                                     Text(
-                                        "Term average percent: ${String.format("%.2f%%", currentRecord.averageScore)}",
+                                        "Term average percent: ${String.format(Locale.US, "%.2f%%", currentRecord.averageScore)}",
                                         fontWeight = FontWeight.Bold,
                                         color = SchoolGreen,
                                         fontSize = 12.sp
@@ -3195,12 +3198,12 @@ fun ModernMetaBlock(
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Avg: ", fontSize = 9.sp, color = Color.Gray)
-                    Text(String.format("%.1f%%", average), fontWeight = FontWeight.Bold, fontSize = 11.sp, color = SchoolGreen)
+                    Text(String.format(Locale.US, "%.1f%%", average), fontWeight = FontWeight.Bold, fontSize = 11.sp, color = SchoolGreen)
                 }
                 if (gpa != null && gpa > 0.0) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("GPA: ", fontSize = 9.sp, color = Color.Gray)
-                        Text(String.format("%.2f", gpa), fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFFD97706))
+                        Text(String.format(Locale.US, "%.2f", gpa), fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFFD97706))
                     }
                 }
             }
@@ -3382,12 +3385,12 @@ fun DelmaClassicPreview(
         ) {
             Row(modifier = Modifier.fillMaxWidth()) {
                 MetaGridCell("No. of students in class", "${getStableRating(s.studentId, 40, 20, 45)}", Modifier.weight(1f))
-                MetaGridCell("Overall total score", String.format("%.1f", record.totalScore), Modifier.weight(1f))
+                MetaGridCell("Overall total score", String.format(Locale.US, "%.1f", record.totalScore), Modifier.weight(1f))
                 MetaGridCell("No. of days school opened", "118", Modifier.weight(1f))
             }
             HorizontalDivider(color = Color.LightGray)
             Row(modifier = Modifier.fillMaxWidth()) {
-                MetaGridCell("Student's average score", String.format("%.2f%%", record.averageScore), Modifier.weight(1f))
+                MetaGridCell("Student's average score", String.format(Locale.US, "%.2f%%", record.averageScore), Modifier.weight(1f))
                 MetaGridCell("Class average score", "54.82%", Modifier.weight(1f))
                 MetaGridCell("No. of days present", "113", Modifier.weight(1f))
             }
@@ -3425,8 +3428,8 @@ fun DelmaClassicPreview(
             }
         } else {
             record.scores.forEachIndexed { idx, sc ->
-                val t1 = String.format("%.1f", sc.caScore * 0.5)
-                val t2 = String.format("%.1f", sc.caScore * 0.5)
+                val t1 = String.format(Locale.US, "%.1f", sc.caScore * 0.5)
+                val t2 = String.format(Locale.US, "%.1f", sc.caScore * 0.5)
                 
                 Row(
                     modifier = Modifier
@@ -4192,7 +4195,7 @@ fun SettingsScreen(
                                 ) {
                                     colors.forEach { (hex, name) ->
                                         val isSel = customColorHex == hex
-                                        val parseColor = Color(android.graphics.Color.parseColor(hex))
+                                        val parseColor = Color(hex.toColorInt())
                                         Box(
                                             modifier = Modifier
                                                 .size(24.dp)
@@ -4320,7 +4323,7 @@ fun SettingsScreen(
                         ) {
                             brandColors.forEach { (hex, name) ->
                                 val isSelectedColor = brandColorHexState.equals(hex, ignoreCase = true)
-                                val col = Color(android.graphics.Color.parseColor(hex))
+                                val col = Color(hex.toColorInt())
                                 Box(
                                     modifier = Modifier
                                         .size(36.dp)
@@ -5551,7 +5554,7 @@ fun ManageSubjectsScreen(
     val activeBrandColor = remember(settings.immersiveMode, settings.brandColorHex) {
         if (settings.immersiveMode) {
             try {
-                Color(android.graphics.Color.parseColor(settings.brandColorHex))
+                Color(settings.brandColorHex.toColorInt())
             } catch (e: Exception) {
                 SchoolGreen
             }
@@ -6160,7 +6163,7 @@ fun PerformanceAnalyticsScreen(
     val activeColor = remember(settings.immersiveMode, settings.brandColorHex) {
         if (settings.immersiveMode) {
             try {
-                Color(android.graphics.Color.parseColor(settings.brandColorHex))
+                Color(settings.brandColorHex.toColorInt())
             } catch (e: Exception) {
                 SchoolGreen
             }
@@ -6522,7 +6525,7 @@ fun PerformanceAnalyticsScreen(
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text("Class Average", fontSize = 10.sp, color = Color.Gray)
                                 Text(
-                                    text = String.format("%.1f%%", schoolAverage),
+                                    text = String.format(Locale.US, "%.1f%%", schoolAverage),
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 18.sp,
                                     color = Color.Black
@@ -6567,7 +6570,7 @@ fun PerformanceAnalyticsScreen(
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text("Pass Rate (>=40%)", fontSize = 10.sp, color = Color.Gray)
                                 Text(
-                                    text = String.format("%.1f%%", passRate),
+                                    text = String.format(Locale.US, "%.1f%%", passRate),
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 18.sp,
                                     color = Color.Black
@@ -6791,7 +6794,7 @@ fun PerformanceAnalyticsScreen(
                             }
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(
-                                    text = String.format("%.2f%%", scholar.averageScore),
+                                    text = String.format(Locale.US, "%.2f%%", scholar.averageScore),
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp,
                                     color = activeColor
@@ -7021,7 +7024,7 @@ fun BezierAreaChart(
                             )
                         }
                         Text(
-                            text = String.format("%.1f%% Score", pt.value),
+                            text = String.format(Locale.US, "%.1f%% Score", pt.value),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.ExtraBold,
                             color = activeColor
@@ -7075,9 +7078,9 @@ fun SubjectComparisonBarChart(
                         modifier = Modifier.weight(1f)
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("CA: ${String.format("%.1f", avgCa)}", fontSize = 10.sp, color = Color.Gray)
-                        Text("Exam: ${String.format("%.1f", avgExam)}", fontSize = 10.sp, color = Color.Gray)
-                        Text("Total: ${String.format("%.1f%%", total)}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = activeColor)
+                        Text("CA: ${String.format(Locale.US, "%.1f", avgCa)}", fontSize = 10.sp, color = Color.Gray)
+                        Text("Exam: ${String.format(Locale.US, "%.1f", avgExam)}", fontSize = 10.sp, color = Color.Gray)
+                        Text("Total: ${String.format(Locale.US, "%.1f%%", total)}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = activeColor)
                     }
                 }
                 
@@ -7176,7 +7179,7 @@ fun GradeDistributionBar(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Grade $g (${String.format("%.1f%%", pct)})",
+                                text = "Grade $g (${String.format(Locale.US, "%.1f%%", pct)})",
                                 fontSize = 11.sp,
                                 color = Color.Black,
                                 fontWeight = FontWeight.SemiBold
@@ -7217,7 +7220,7 @@ fun TemplateEditorScreen(
     val activeBrandColor = remember(settings.immersiveMode, settings.brandColorHex) {
         if (settings.immersiveMode) {
             try {
-                Color(android.graphics.Color.parseColor(settings.brandColorHex))
+                Color(settings.brandColorHex.toColorInt())
             } catch (e: Exception) {
                 SchoolGreen
             }
@@ -8126,7 +8129,7 @@ fun ExportScreen(
                             Text("BATCH AVERAGE", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
                             val avg = if (filteredRecords.isNotEmpty()) filteredRecords.map { it.averageScore }.average() else 0.0
                             Text(
-                                text = String.format("%.1f%%", avg),
+                                text = String.format(Locale.US, "%.1f%%", avg),
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.DarkGray
@@ -8399,7 +8402,7 @@ fun ExportScreen(
 
                         Column(horizontalAlignment = Alignment.End) {
                             Text(
-                                text = String.format("%.1f%%", record.averageScore),
+                                text = String.format(Locale.US, "%.1f%%", record.averageScore),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp,
                                 color = MaterialTheme.colorScheme.primary

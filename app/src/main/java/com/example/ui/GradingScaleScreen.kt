@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.*
+import java.util.Locale
 
 private val ColorSwatches = listOf(
     "#15803D" to "Forest Green",
@@ -252,7 +253,7 @@ fun GradingScaleScreen(
                                     }
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = "${scale.scaleName} • Max ${String.format("%.1f", scale.maxGpa)} GPA",
+                                        text = "${scale.scaleName} • Max ${String.format(Locale.US, "%.1f", scale.maxGpa)} GPA",
                                         fontSize = 11.sp,
                                         color = if (isSelected) Color.White.copy(alpha = 0.85f) else Color.Gray
                                     )
@@ -611,7 +612,7 @@ fun GradingScaleScreen(
                         }
 
                         Text(
-                            text = "Score: ${String.format("%.1f", testSimulatorScore)}%",
+                            text = "Score: ${String.format(Locale.US, "%.1f", testSimulatorScore)}%",
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp
                         )
@@ -671,7 +672,7 @@ fun GradingScaleScreen(
 
                         Column(horizontalAlignment = Alignment.End) {
                             Text(
-                                text = "${String.format("%.2f", evaluatedBand.gpaPoints)} GPA Pts",
+                                text = "${String.format(Locale.US, "%.2f", evaluatedBand.gpaPoints)} GPA Pts",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp,
                                 color = parseHexColor(evaluatedBand.colorHex)
@@ -789,7 +790,7 @@ fun GradingScaleScreen(
                                                     shape = RoundedCornerShape(4.dp)
                                                 ) {
                                                     Text(
-                                                        text = "${String.format("%.2f", band.gpaPoints)} Pts",
+                                                        text = "${String.format(Locale.US, "%.2f", band.gpaPoints)} Pts",
                                                         fontSize = 11.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         color = parseHexColor(band.colorHex),
