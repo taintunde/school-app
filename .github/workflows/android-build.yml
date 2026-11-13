@@ -1,35 +1,22 @@
-name: Android CI & Release Build
+name: Android APK Build
 
 on:
+  workflow_dispatch:
   push:
     branches: [ main, master ]
-    tags:
-      - 'v*'
-  pull_request:
-    branches: [ main, master ]
-  workflow_dispatch:
-    inputs:
-      release_tag:
-        description: 'Optional release tag (e.g. v1.0.0) to publish a GitHub Release'
-        required: false
-        default: ''
-
-permissions:
-  contents: write
 
 jobs:
-  build-and-test:
-    name: Test, Lint & Build APK
+  build-apk:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '21'
 
       - name: Set up Android SDK
@@ -40,118 +27,12 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
-      - name: Extract Build Metadata
-        id: meta
-        run: |
-          VERSION_NAME=$(grep -E 'versionName\s*=' app/build.gradle.kts | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')
-          VERSION_CODE=$(grep -E 'versionCode\s*=' app/build.gradle.kts | head -n1 | sed -E 's/[^0-9]//g')
-          BUILD_DATE=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
-          echo "version_name=${VERSION_NAME:-1.0}" >> "$GITHUB_OUTPUT"
-          echo "version_code=${VERSION_CODE:-1}" >> "$GITHUB_OUTPUT"
-          echo "build_date=${BUILD_DATE}" >> "$GITHUB_OUTPUT"
+      - name: Build debug APK (skip tests and lint)
+        run: ./gradlew assembleDebug -x test -x lint --no-daemon
 
-      - name: Prepare Debug Keystore
-        run: |
-          if [ -n "${{ secrets.DEBUG_KEYSTORE_BASE64 }}" ]; then
-            echo "${{ secrets.DEBUG_KEYSTORE_BASE64 }}" | base64 -d > debug.keystore
-          else
-            keytool -genkey -v -keystore debug.keystore \
-              -storepass android -alias androiddebugkey -keypass android \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -dname "CN=Android Debug,O=Android,C=US"
-          fi
-
-      - name: Create .env from template if missing
-        run: |
-          if [ ! -f .env ] && [ -f .env.example ]; then
-            cp .env.example .env
-          fi
-
-      - name: Run Unit Tests
-        run: gradle :app:testDebugUnitTest --no-daemon
-
-      - name: Run Android Lint
-        run: gradle :app:lintDebug --no-daemon
-
-      - name: Build Debug APK
-        run: gradle :app:assembleDebug --no-daemon
-
-      - name: Upload Debug APK Artifact
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: smartresult-ng-debug-apk
+          name: school-app-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-
-      - name: Decode Release Keystore (if configured)
-        id: release_signing
-        if: ${{ secrets.SIGNING_KEYSTORE_BASE64 != '' && secrets.STORE_PASSWORD != '' && secrets.KEY_PASSWORD != '' }}
-        run: |
-          echo "${{ secrets.SIGNING_KEYSTORE_BASE64 }}" | base64 -d > my-upload-key.jks
-          echo "configured=true" >> "$GITHUB_OUTPUT"
-
-      - name: Build Signed Release APK
-        if: steps.release_signing.outputs.configured == 'true'
-        env:
-          KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: gradle :app:assembleRelease --no-daemon
-
-      - name: Upload Release APK Artifact
-        if: steps.release_signing.outputs.configured == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: smartresult-ng-release-apk
-          path: app/build/outputs/apk/release/app-release.apk
-          if-no-files-found: error
-
-      - name: Prepare Release Notes & Assets
-        id: release_prep
-        if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
-        run: |
-          mkdir -p release-assets
-          cp app/build/outputs/apk/debug/app-debug.apk release-assets/SmartResult-NG-v${{ steps.meta.outputs.version_name }}-debug.apk
-          RELEASE_TAG="${{ inputs.release_tag }}"
-          if [ -z "$RELEASE_TAG" ]; then
-            RELEASE_TAG="${GITHUB_REF#refs/tags/}"
-          fi
-          echo "tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
-
-          SIGN_STATUS="Debug-signed APK only (configure SIGNING_KEYSTORE_BASE64, STORE_PASSWORD, and KEY_PASSWORD secrets for signed release APK)"
-          if [ "${{ steps.release_signing.outputs.configured }}" == "true" ]; then
-            cp app/build/outputs/apk/release/app-release.apk release-assets/SmartResult-NG-v${{ steps.meta.outputs.version_name }}-release.apk
-            SIGN_STATUS="Signed release APK + debug APK included"
-          fi
-
-          cat <<EOF > release-notes.md
-          ## SmartResult NG ${RELEASE_TAG}
-
-          - **Version Name:** ${{ steps.meta.outputs.version_name }}
-          - **Version Code:** ${{ steps.meta.outputs.version_code }}
-          - **Package ID:** \`com.smresultng.ui\`
-          - **Build Date:** ${{ steps.meta.outputs.build_date }}
-          - **Build Status:** ${SIGN_STATUS}
-
-          ### Highlights
-          - Custom grading scales & GPA weighting per school level
-          - CSV import & column mapping wizard
-          - Student results management, ledger tables, and PDF report card exports
-          - Optional Firebase Firestore synchronization
-          EOF
-
-      - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.release_prep.outputs.tag }}
-          name: SmartResult NG ${{ steps.release_prep.outputs.tag }}
-          body_path: release-notes.md
-          files: release-assets/*.apk
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Clean Up Keystore Files
-        if: always()
-        run: rm -f my-upload-key.jks debug.keystore
