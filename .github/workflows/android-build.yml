@@ -8,6 +8,14 @@ on:
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Optional release tag (e.g. v1.0.0) to publish a GitHub Release'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
 
 jobs:
   build-and-test:
@@ -31,6 +39,16 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
+
+      - name: Extract Build Metadata
+        id: meta
+        run: |
+          VERSION_NAME=$(grep -E 'versionName\s*=' app/build.gradle.kts | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')
+          VERSION_CODE=$(grep -E 'versionCode\s*=' app/build.gradle.kts | head -n1 | sed -E 's/[^0-9]//g')
+          BUILD_DATE=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          echo "version_name=${VERSION_NAME:-1.0}" >> "$GITHUB_OUTPUT"
+          echo "version_code=${VERSION_CODE:-1}" >> "$GITHUB_OUTPUT"
+          echo "build_date=${BUILD_DATE}" >> "$GITHUB_OUTPUT"
 
       - name: Prepare Debug Keystore
         run: |
@@ -88,13 +106,48 @@ jobs:
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
 
-      - name: Publish GitHub Release on Version Tag
-        if: startsWith(github.ref, 'refs/tags/v') && steps.release_signing.outputs.configured == 'true'
+      - name: Prepare Release Notes & Assets
+        id: release_prep
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
+        run: |
+          mkdir -p release-assets
+          cp app/build/outputs/apk/debug/app-debug.apk release-assets/SmartResult-NG-v${{ steps.meta.outputs.version_name }}-debug.apk
+          RELEASE_TAG="${{ inputs.release_tag }}"
+          if [ -z "$RELEASE_TAG" ]; then
+            RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+
+          SIGN_STATUS="Debug-signed APK only (configure SIGNING_KEYSTORE_BASE64, STORE_PASSWORD, and KEY_PASSWORD secrets for signed release APK)"
+          if [ "${{ steps.release_signing.outputs.configured }}" == "true" ]; then
+            cp app/build/outputs/apk/release/app-release.apk release-assets/SmartResult-NG-v${{ steps.meta.outputs.version_name }}-release.apk
+            SIGN_STATUS="Signed release APK + debug APK included"
+          fi
+
+          cat <<EOF > release-notes.md
+          ## SmartResult NG ${RELEASE_TAG}
+
+          - **Version Name:** ${{ steps.meta.outputs.version_name }}
+          - **Version Code:** ${{ steps.meta.outputs.version_code }}
+          - **Package ID:** \`com.smresultng.ui\`
+          - **Build Date:** ${{ steps.meta.outputs.build_date }}
+          - **Build Status:** ${SIGN_STATUS}
+
+          ### Highlights
+          - Custom grading scales & GPA weighting per school level
+          - CSV import & column mapping wizard
+          - Student results management, ledger tables, and PDF report card exports
+          - Optional Firebase Firestore synchronization
+          EOF
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            app/build/outputs/apk/release/app-release.apk
-            app/build/outputs/apk/debug/app-debug.apk
+          tag_name: ${{ steps.release_prep.outputs.tag }}
+          name: SmartResult NG ${{ steps.release_prep.outputs.tag }}
+          body_path: release-notes.md
+          files: release-assets/*.apk
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
