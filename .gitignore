@@ -1,0 +1,44 @@
+# Built application files
+*.apk
+*.ap_
+*.aab
+.build-outputs/
+/build
+/app/build
+
+# Gradle files
+.gradle/
+.kotlin/
+
+# Local configuration & secrets
+local.properties
+/local.properties
+.env
+.env.*
+!.env.example
+google-services.json
+app/google-services.json
+
+# Signing keystores & private certificates
+*.jks
+*.keystore
+*.p12
+*.pem
+debug.keystore
+debug.keystore.base64
+my-upload-key.jks
+
+# IDE & OS files
+*.iml
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/captures
+.externalNativeBuild
+.cxx
+.aistudio/
+assets/.aistudio/

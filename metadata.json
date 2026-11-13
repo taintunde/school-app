@@ -1,0 +1,6 @@
+{
+  "name": "SmartResult NG",
+  "description": "A modern academic results generator for Primary and Secondary Schools in Nigeria, with student management, grading system, customizable templates, single-student PDF reports, and bulk school-wide PDF exports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
